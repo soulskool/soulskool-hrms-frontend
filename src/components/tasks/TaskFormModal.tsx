@@ -4,8 +4,8 @@
 import { useEffect } from 'react';
 import { useForm, SubmitHandler, Controller, FieldErrors } from 'react-hook-form'; // Import FieldErrors
 import { zodResolver } from '@hookform/resolvers/zod';
-import { employeeTaskSchema, EmployeeTaskSchema, adminTaskSchema, AdminTaskSchema } from '../../lib/validation/taskSchema';
-import { Task, TaskFormData, AdminTaskFormData, TaskPriority } from '../../types';
+import { employeeTaskSchema, EmployeeTaskSchema, adminTaskSchema, AdminTaskSchema, } from '../../lib/validation/taskSchema';
+import { Task, TaskFormData, AdminTaskFormData, TaskPriority, Employee } from '../../types';
 import { useSelector } from 'react-redux';
 import { RootState } from '../../lib/redux/store';
 import { Loader2, Save, X, Tag, Calendar, MessageSquare, User } from 'lucide-react';
@@ -18,12 +18,16 @@ interface Props {
   isAdmin: boolean;
   actionLoading: boolean;
   error?: string | null;
+
+  // NEW PROPS for Admin mode
+  employeeList?: Employee[];
+  employeesLoading?: boolean;
 }
 
 // Define a union type for the form data based on isAdmin
 type FormSchema = AdminTaskSchema | EmployeeTaskSchema;
 
-export default function TaskFormModal({ isOpen, onClose, onSubmitTask, taskToEdit, isAdmin, actionLoading, error }: Props) {
+export default function TaskFormModal({ isOpen, onClose, onSubmitTask, taskToEdit, isAdmin, actionLoading, error, employeeList = [], employeesLoading = false }: Props) {
     const isEditMode = Boolean(taskToEdit);
     // Use the correct schema based on isAdmin flag for validation
     const schema = isAdmin ? adminTaskSchema : employeeTaskSchema;
@@ -77,6 +81,8 @@ export default function TaskFormModal({ isOpen, onClose, onSubmitTask, taskToEdi
             });
     };
 
+
+
     if (!isOpen) return null;
 
     // Type assertion for accessing admin-specific errors
@@ -102,19 +108,43 @@ export default function TaskFormModal({ isOpen, onClose, onSubmitTask, taskToEdi
 
              {/* Assignee (Admin only) */}
              {isAdmin && (
-                  <div>
+                  // <div>
+                  //   <label htmlFor="assigneeEmployeeId" className="form-label flex items-center"><User size={14} className="mr-1"/>Assign To (Employee ID)*</label>
+                  //   <input
+                  //       id="assigneeEmployeeId"
+                  //       // Register using the specific admin type path
+                  //       {...register("assigneeEmployeeId" as keyof AdminTaskSchema)}
+                  //       // Check errors using the asserted adminErrors type
+                  //       className={`input ${adminErrors.assigneeEmployeeId ? 'border-red-500' : ''}`}
+                  //       placeholder="Enter Employee ID..."
+                  //   />
+                  //    {/* Access errors using the asserted adminErrors type */}
+                  //    {adminErrors.assigneeEmployeeId && <p className="error-text">{adminErrors.assigneeEmployeeId.message}</p>}
+                  // </div>
+
+                <>
                     <label htmlFor="assigneeEmployeeId" className="form-label flex items-center"><User size={14} className="mr-1"/>Assign To (Employee ID)*</label>
-                    <input
+                    <select
                         id="assigneeEmployeeId"
                         // Register using the specific admin type path
                         {...register("assigneeEmployeeId" as keyof AdminTaskSchema)}
                         // Check errors using the asserted adminErrors type
                         className={`input ${adminErrors.assigneeEmployeeId ? 'border-red-500' : ''}`}
-                        placeholder="Enter Employee ID..."
-                    />
+                        disabled={employeesLoading}
+                    >
+                         <option value="">{employeesLoading ? 'Loading employees...' : 'Select Employee...'}</option>
+                         {employeeList.map(emp => (
+                             // IMPORTANT: We use the Employee ID string here, as the backend logic relies on it to find the MongoDB ObjectId
+                            <option key={emp.employeeInfo.employeeId} value={emp.employeeInfo.employeeId}>
+                                {emp.employeeInfo.name} ({emp.employeeInfo.employeeId})
+                            </option>
+                        ))}
+                    </select>
                      {/* Access errors using the asserted adminErrors type */}
                      {adminErrors.assigneeEmployeeId && <p className="error-text">{adminErrors.assigneeEmployeeId.message}</p>}
-                  </div>
+                  </>
+
+
              )}
 
 

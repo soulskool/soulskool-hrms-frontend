@@ -4,13 +4,14 @@
 import { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '../../../lib/redux/store';
-import { fetchAdminTasks, adminCreateTask, adminUpdateTask, adminUpdateTaskStatus, adminDeleteTask, clearAdminTaskError } from '../../../lib/redux/slices/adminTaskSlice';
+import { fetchAdminTasks, adminCreateTask, adminUpdateTask, adminUpdateTaskStatus, adminDeleteTask, clearAdminTaskError } from '@/lib/redux/slices/adminTaskSlice';
 import { fetchEmployees } from '../../../lib/redux/slices/employeeSlice'; // Import action to fetch employees
 import TaskList from '../../../components/tasks/TaskList';
 import TaskFormModal from '../../../components/tasks/TaskFormModal';
 import { Task, AdminTaskFormData, TaskStatus, TaskFormData } from '../../../types';
 import { PlusCircle, ListTodo, ListChecks, Filter, X as ClearFilterIcon } from 'lucide-react';
 import toast from 'react-hot-toast';
+import ExportMonthlyTasks from '@/components/tasks/ExportMonthlyTasks';
 
 type TaskTab = 'Open' | 'Completed';
 
@@ -67,9 +68,48 @@ export default function AdminTasksPage() {
         setTaskToEdit(null);
     };
 
-    const handleSubmitTask = async (data: TaskFormData | AdminTaskFormData) => { /* ... same submit logic ... */ };
-    const handleStatusChange = (taskId: string, newStatus: TaskStatus) => { /* ... same status change logic ... */ };
-    const handleDelete = (taskId: string, taskName: string) => { /* ... same delete logic ... */ };
+    
+
+const handleSubmitTask = async (data: TaskFormData | AdminTaskFormData) => {
+        let resultAction;
+        const adminData = data as AdminTaskFormData; // Cast for admin-specific fields if needed
+
+        if (taskToEdit) {
+             // Ensure assignee ID is included for update if it was part of the form
+             const updateData = { ...adminData, assigneeEmployeeId: adminData.assigneeEmployeeId || taskToEdit.assigneeEmployeeId};
+             resultAction = await dispatch(adminUpdateTask({ taskId: taskToEdit._id, taskData: updateData }));
+             if(adminUpdateTask.fulfilled.match(resultAction)) toast.success("Task updated!");
+        } else {
+             // Ensure assignee ID is present for creation
+             if (!adminData.assigneeEmployeeId) {
+                 toast.error("Assignee Employee ID is required.");
+                 throw new Error("Assignee required."); // Prevent modal close
+             }
+             resultAction = await dispatch(adminCreateTask(adminData));
+             if(adminCreateTask.fulfilled.match(resultAction)) toast.success("Task created!");
+        }
+
+        if (resultAction.meta.requestStatus === 'rejected') {
+            throw new Error(resultAction.payload as string);
+        }
+    };
+
+    const handleStatusChange = (taskId: string, newStatus: TaskStatus) => {
+         dispatch(adminUpdateTaskStatus({ taskId, status: newStatus }))
+             .unwrap()
+            .then(() => toast.success(`Task marked as ${newStatus.toLowerCase()}!`))
+            .catch((err) => toast.error(err || 'Failed to update status'));
+    };
+
+     const handleDelete = (taskId: string, taskName: string) => {
+         // Confirm before deleting
+         dispatch(adminDeleteTask(taskId))
+            .unwrap()
+            .then(() => toast.success(`Task "${taskName}" deleted!`))
+            .catch((err) => toast.error(err || 'Failed to delete task'));
+    };
+
+
 
     // Define getTabClass INSIDE the component
     const getTabClass = (tabName: TaskTab) => {
@@ -93,6 +133,7 @@ export default function AdminTasksPage() {
                 </button>
             </div>
 
+          <ExportMonthlyTasks />
 
             {/* Filter Section */}
             <div className="bg-white p-3 rounded-md shadow-sm border flex items-center gap-4">
@@ -157,7 +198,12 @@ export default function AdminTasksPage() {
                 isAdmin={true}
                 actionLoading={actionLoading}
                 error={error}
+                employeeList={employeeList.filter(emp => emp.isActive)} // Only need active employees for assignment
+                employeesLoading={employeesLoading}
              />
+
+
+             
         </div>
     );
 }

@@ -170,6 +170,7 @@ export interface AttendanceHistoryData {
     employeesAttendance: EmployeeAttendanceHistory[];
     dates: string[]; // Array of 'YYYY-MM-DD' strings for the columns
     currentPage: number;
+    hasMore: boolean;
     // totalPages?: number; // Add if backend provides it
 }
 

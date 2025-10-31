@@ -1,29 +1,46 @@
 // src/lib/redux/slices/adminLeaveSlice.ts
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import api from '../../api';
-import { LeaveRequest, EmployeeLeaveBalanceAdmin } from '../../../types';
+import { LeaveRequest, EmployeeLeaveBalanceAdmin, LeaveRequestListResponse } from '../../../types';
+import { RootState } from '../store';
+
+interface PaginationInfo { 
+    currentPage: number;
+    totalPages: number;
+    totalRequests: number;
+}
+
 
 interface AdminLeaveState {
   pendingRequests: LeaveRequest[];
+  approvedRequests: LeaveRequest[];
   allBalances: EmployeeLeaveBalanceAdmin[];
-  selectedEmployeeBalance: EmployeeLeaveBalanceAdmin | null; // For modal
+  selectedEmployeeBalance: EmployeeLeaveBalanceAdmin | null; 
+  pendingPagination: PaginationInfo; // Pagination for pending requests
+  approvedPagination: PaginationInfo; // New pagination for approved requests
   loadingPending: boolean;
+  loadingApproved: boolean;
   loadingBalances: boolean;
-  loadingAction: boolean; // For approve/reject/update balance
+  loadingAction: boolean; 
   error: string | null;
 }
 
+const initialPagination: PaginationInfo = { currentPage: 1, totalPages: 1, totalRequests: 0 };
+
 const initialState: AdminLeaveState = {
   pendingRequests: [],
+  approvedRequests: [], // Initialize new state
   allBalances: [],
   selectedEmployeeBalance: null,
+  pendingPagination: initialPagination,
+  approvedPagination: initialPagination, // Initialize new pagination
   loadingPending: false,
+  loadingApproved: false, // Initialize new loading state
   loadingBalances: false,
   loadingAction: false,
   error: null,
 };
 
-// --- Thunks ---
 
 export const fetchPendingLeaves = createAsyncThunk(
   'adminLeave/fetchPending',
@@ -73,7 +90,32 @@ export const updateEmployeeBalance = createAsyncThunk(
   }
 );
 
-// --- Slice ---
+export const fetchApprovedLeaveHistory = createAsyncThunk(
+    'adminLeave/fetchApprovedHistory',
+    async (page: number = 1, { rejectWithValue, getState }) => {
+        try {
+            const { data } = await api.get(`/admin/leave/approved?page=${page}&limit=10`);
+            const currentState = (getState() as RootState).adminLeave;
+
+            // Append new results to existing list if loading next page
+            if (page > 1) {
+                return {
+                    ...data,
+                    requests: [...currentState.approvedRequests, ...data.requests]
+                } as LeaveRequestListResponse;
+            } else {
+                return data as LeaveRequestListResponse; 
+            }
+
+        } catch (error: any) {
+            return rejectWithValue(error.response?.data?.message || 'Failed to fetch approved leave history');
+        }
+    }
+);
+
+
+
+
 const adminLeaveSlice = createSlice({
   name: 'adminLeave',
   initialState,
@@ -122,7 +164,23 @@ const adminLeaveSlice = createSlice({
         }
         state.selectedEmployeeBalance = null; // Close modal implicitly
       })
-      .addCase(updateEmployeeBalance.rejected, (state, action) => { state.loadingAction = false; state.error = action.payload as string; });
+      .addCase(updateEmployeeBalance.rejected, (state, action) => { state.loadingAction = false; state.error = action.payload as string; })
+        
+      .addCase(fetchApprovedLeaveHistory.pending, (state, action) => { 
+            state.loadingApproved = true; 
+            state.error = null; 
+      })
+      .addCase(fetchApprovedLeaveHistory.fulfilled, (state, action: PayloadAction<LeaveRequestListResponse>) => {
+        state.loadingApproved = false;
+        state.approvedRequests = action.payload.requests;
+        state.approvedPagination = {
+             currentPage: action.payload.currentPage,
+             totalPages: action.payload.totalPages,
+             totalRequests: action.payload.totalRequests
+        };
+      })
+      .addCase(fetchApprovedLeaveHistory.rejected, (state, action) => { state.loadingApproved = false; state.error = action.payload as string; })
+
   },
 });
 

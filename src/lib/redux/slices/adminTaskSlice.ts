@@ -17,6 +17,8 @@ interface AdminTaskState {
   loading: boolean;
   actionLoading: boolean;
   error: string | null;
+    exporting?: boolean;
+  exportError?: string | null;
 }
 
 const initialState: AdminTaskState = {
@@ -28,6 +30,8 @@ const initialState: AdminTaskState = {
   loading: false,
   actionLoading: false,
   error: null,
+  exporting: false,
+  exportError: null,
 };
 // Helper to process tags
 const processTaskData = (data: TaskFormData | AdminTaskFormData) => ({
@@ -102,6 +106,41 @@ export const adminDeleteTask = createAsyncThunk(
   }
 );
 
+
+
+export const exportMonthlyTasks = createAsyncThunk<
+  void,
+  { year: number; month: number },
+  { rejectValue: string }
+>(
+  'adminTasks/exportMonthlyTasks',
+  async ({ year, month }, { rejectWithValue }) => {
+    try {
+      const res = await api.get(`/admin/tasks/export?year=${year}&month=${month}`, {
+        responseType: 'blob',
+      });
+      const y = String(year);
+      const m = String(month).padStart(2, '0');
+      const filename = `Tasks_${y}-${m}.xlsx`;
+
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      return rejectWithValue(err?.response?.data?.message || 'Failed to export tasks');
+    }
+  }
+);
+
+
+
+
+
 const adminTaskSlice = createSlice({
   name: 'adminTasks',
   initialState,
@@ -141,9 +180,25 @@ const adminTaskSlice = createSlice({
       .addCase(adminCreateTask.rejected, (state, action) => { state.actionLoading = false; state.error = action.payload as string; })
 
       // Update Task (Details) - No change needed for pagination counts here
-      .addCase(adminUpdateTask.pending, (state) => { /* ... */ })
-      .addCase(adminUpdateTask.fulfilled, (state, action: PayloadAction<Task>) => { /* ... */ })
-      .addCase(adminUpdateTask.rejected, (state, action) => { /* ... */ })
+      // .addCase(adminUpdateTask.pending, (state) => { /* ... */ })
+      // .addCase(adminUpdateTask.fulfilled, (state, action: PayloadAction<Task>) => { /* ... */ })
+      // .addCase(adminUpdateTask.rejected, (state, action) => { /* ... */ })
+
+     .addCase(adminUpdateTask.pending, (state) => { state.actionLoading = true; state.error = null; })
+      .addCase(adminUpdateTask.fulfilled, (state, action: PayloadAction<Task>) => {
+        state.actionLoading = false;
+        // Update in both lists potentially, as admin might edit a completed task's details?
+        // Or just update the one matching the status? Let's update both for simplicity now.
+        const updateTask = (tasks: Task[]) => {
+            const index = tasks.findIndex(t => t._id === action.payload._id);
+            if (index !== -1) tasks[index] = action.payload;
+            return tasks;
+        }
+        state.openTasks = updateTask([...state.openTasks]);
+        state.completedTasks = updateTask([...state.completedTasks]);
+      })
+      .addCase(adminUpdateTask.rejected, (state, action) => { state.actionLoading = false; state.error = action.payload as string; })
+
 
       // Update Task Status - Adjust total counts for both tabs
       .addCase(adminUpdateTaskStatus.pending, (state) => { state.actionLoading = true; state.error = null; })
@@ -189,7 +244,20 @@ const adminTaskSlice = createSlice({
         if (state.openPagination.totalTasks < 0) state.openPagination.totalTasks = 0;
         if (state.completedPagination.totalTasks < 0) state.completedPagination.totalTasks = 0;
       })
-      .addCase(adminDeleteTask.rejected, (state, action) => { state.actionLoading = false; state.error = action.payload as string; });
+      .addCase(adminDeleteTask.rejected, (state, action) => { state.actionLoading = false; state.error = action.payload as string; })
+
+      .addCase(exportMonthlyTasks.pending, (state) => {
+    state.exporting = true;
+    state.exportError = null;
+  })
+  .addCase(exportMonthlyTasks.fulfilled, (state) => {
+    state.exporting = false;
+  })
+  .addCase(exportMonthlyTasks.rejected, (state, action) => {
+    state.exporting = false;
+    state.exportError = action.payload as string;
+  });
+  
   },
 });
 

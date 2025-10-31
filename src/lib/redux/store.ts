@@ -10,6 +10,7 @@ import employeeTaskReducer from './slices/employeeTaskSlice'; // Import employee
 import adminTaskReducer from './slices/adminTaskSlice';
 import employeePayslipReducer from './slices/employeePayslipSlice'; // Import employee payslip slice
 import adminPayrollReducer from './slices/adminPayrollSlice';
+import salaryStatementReducer from './slices/salaryStatementSlice'
 
 export const store = configureStore({
   reducer: {
@@ -24,6 +25,7 @@ export const store = configureStore({
     adminTasks: adminTaskReducer,
     employeePayslips: employeePayslipReducer, // Add employee payslip reducer
     adminPayroll: adminPayrollReducer,
+    salaryStatement: salaryStatementReducer
   },
 });
 
